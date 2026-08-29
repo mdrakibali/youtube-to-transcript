@@ -11,7 +11,6 @@ import {
   List,
   AlertCircle,
   ExternalLink,
-  Sparkles,
   RefreshCw,
   Sliders,
   ChevronDown,
@@ -19,13 +18,11 @@ import {
   Key,
   Play,
   Volume2,
-  Zap,
-  Globe,
-  Radio,
-  Share2,
   FileCode,
   Sun,
   Moon,
+  ArrowRight,
+  HelpCircle,
 } from "lucide-react";
 import type { TranscriptResponse, TranscriptSegment } from "@/lib/youtube";
 import { getTranscriptAction } from "@/app/actions/transcript";
@@ -38,63 +35,22 @@ function YoutubeIcon({ className = "w-5 h-5" }: { className?: string }) {
   );
 }
 
-// Sample URLs for quick testing
+// Sample practical videos
 const SAMPLE_VIDEOS = [
   {
     title: "Steve Jobs Speech",
-    tag: "Commencement",
+    tag: "Lecture",
     url: "https://www.youtube.com/watch?v=UF8uR6Z6KLc",
   },
   {
-    title: "React Tutorial",
-    tag: "Programming",
+    title: "React Full Course",
+    tag: "Tutorial",
     url: "https://www.youtube.com/watch?v=SqcY0GlETPk",
   },
   {
-    title: "Math Mystery",
+    title: "Veritasium",
     tag: "Science",
     url: "https://www.youtube.com/watch?v=HeQX2HjkcNo",
-  },
-];
-
-const FEATURES = [
-  {
-    icon: Play,
-    title: "Click-to-Play Video Sync",
-    desc: "Click any transcript sentence to instantly seek the video to that exact timestamp and start playing.",
-  },
-  {
-    icon: Globe,
-    title: "Multi-Language Captions",
-    desc: "Switch seamlessly between manual and auto-generated subtitle tracks across all available languages.",
-  },
-  {
-    icon: Search,
-    title: "Real-Time Search & Highlight",
-    desc: "Instantly search inside long transcripts and highlight matching keywords with millisecond precision.",
-  },
-  {
-    icon: Download,
-    title: "Export to .TXT & .SRT",
-    desc: "Download clean plain text transcripts or standard SubRip (.SRT) subtitle files for video editing.",
-  },
-];
-
-const HOW_IT_WORKS = [
-  {
-    step: "01",
-    title: "Paste Video Link",
-    desc: "Enter any standard YouTube, Shorts, or Unlisted video URL into the input field.",
-  },
-  {
-    step: "02",
-    title: "Extract Transcripts",
-    desc: "Our serverless engine parses timestamps, speaker subtitles, and video metadata in milliseconds.",
-  },
-  {
-    step: "03",
-    title: "Search, Play & Export",
-    desc: "Navigate through timestamped segments, jump to moments in video, or export to your favorite format.",
   },
 ];
 
@@ -110,7 +66,6 @@ export default function Home() {
   const [isDark, setIsDark] = useState(true);
 
   useEffect(() => {
-    // Check saved theme or system preference
     const savedTheme = localStorage.getItem("theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const initialDark = savedTheme ? savedTheme === "dark" : prefersDark;
@@ -181,7 +136,7 @@ export default function Home() {
     langCode: string = selectedLang
   ) => {
     if (!targetUrl.trim()) {
-      setError("Please provide a valid YouTube video URL.");
+      setError("Please enter a YouTube video URL.");
       return;
     }
 
@@ -197,7 +152,7 @@ export default function Home() {
       });
 
       if (!result.success || !result.data) {
-        throw new Error(result.message || "Failed to fetch transcript.");
+        throw new Error(result.message || "Could not retrieve transcript for this video.");
       }
 
       setData(result.data);
@@ -318,141 +273,91 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center relative overflow-x-hidden transition-colors duration-300">
-      {/* Dynamic Ambient Glow Mesh */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] bg-gradient-to-b from-red-500/15 via-orange-500/5 to-transparent dark:from-red-600/20 dark:via-red-950/10 blur-3xl -z-10 pointer-events-none" />
-      <div className="absolute top-96 right-0 w-96 h-96 bg-indigo-500/10 dark:bg-purple-600/10 rounded-full blur-[140px] -z-10 pointer-events-none" />
-      <div className="absolute top-48 left-0 w-96 h-96 bg-red-500/10 dark:bg-rose-600/10 rounded-full blur-[140px] -z-10 pointer-events-none" />
-
-      {/* Grid Pattern Overlay */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800f_1px,transparent_1px),linear-gradient(to_bottom,#8080800f_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] -z-10 pointer-events-none" />
-
-      {/* Top Navbar with Glassmorphism & Theme Toggle */}
-      <nav className="w-full glass-nav sticky top-0 z-50 transition-colors duration-300">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-red-600 to-red-500 flex items-center justify-center shadow-lg shadow-red-600/30 border border-white/20 dark:border-white/10">
-              <YoutubeIcon className="w-5 h-5 text-white" />
+    <div className="min-h-screen flex flex-col items-center bg-slate-50 dark:bg-[#09090b] text-slate-900 dark:text-neutral-100 transition-colors duration-200">
+      {/* Top Navbar */}
+      <nav className="w-full glass-nav sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-red-600 flex items-center justify-center text-white shadow-sm">
+              <YoutubeIcon className="w-4 h-4" />
             </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-base tracking-tight flex items-center gap-1 text-slate-900 dark:text-white">
-                Transcript<span className="text-red-600 dark:text-red-500 font-extrabold">Tube</span>
-              </span>
-              <span className="text-[10px] text-slate-500 dark:text-neutral-400 font-medium tracking-wide uppercase">
-                Interactive Video AI
-              </span>
-            </div>
+            <span className="font-semibold text-sm tracking-tight text-slate-900 dark:text-white">
+              YouTube Transcript
+            </span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full glass-item text-xs text-slate-600 dark:text-neutral-400">
-              <Radio className="w-3 h-3 text-green-500 dark:text-green-400 animate-pulse" />
-              <span>Cloudflare Edge Active</span>
-            </div>
-
-            {/* Dark / Light Mode Switcher */}
+          <div className="flex items-center gap-2">
+            {/* Theme Toggle Button */}
             <button
               type="button"
               onClick={toggleTheme}
-              className="p-2 rounded-xl glass-item text-slate-600 dark:text-neutral-300 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center justify-center"
-              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-              aria-label="Toggle Theme"
+              className="p-2 rounded-lg text-slate-500 hover:text-slate-900 dark:text-neutral-400 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-neutral-800 transition cursor-pointer"
+              title={isDark ? "Light mode" : "Dark mode"}
+              aria-label="Toggle theme"
             >
               {isDark ? (
-                <Sun className="w-4 h-4 text-amber-400 transition-transform rotate-0 hover:rotate-45" />
+                <Sun className="w-4 h-4 text-amber-400" />
               ) : (
-                <Moon className="w-4 h-4 text-indigo-600 transition-transform rotate-0 hover:-rotate-12" />
+                <Moon className="w-4 h-4 text-slate-600" />
               )}
             </button>
           </div>
         </div>
       </nav>
 
-      {/* Main Content Container */}
-      <main className="w-full max-w-6xl px-4 py-10 sm:py-16 flex flex-col gap-10">
-        {/* Hero Section */}
-        <section className="flex flex-col items-center text-center gap-5 max-w-3xl mx-auto">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-red-500/10 border border-red-500/25 text-red-600 dark:text-red-400 text-xs font-semibold tracking-wide shadow-inner backdrop-blur-md">
-            <Sparkles className="w-3.5 h-3.5 text-red-500 animate-pulse" />
-            <span>Instant YouTube Transcript & Video Sync</span>
-          </div>
-
-          {/* Main Headline */}
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight leading-[1.14] text-slate-900 dark:text-white">
-            Turn Any YouTube Video into{" "}
-            <span className="bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 bg-clip-text text-transparent">
-              Interactive Transcripts
-            </span>
+      {/* Main Container */}
+      <main className="w-full max-w-5xl px-4 py-8 sm:py-12 flex flex-col gap-8">
+        {/* Header (Clean & Direct) */}
+        <section className="flex flex-col items-center text-center gap-2.5 max-w-2xl mx-auto">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Extract & Search YouTube Transcripts
           </h1>
-
-          {/* Subtitle */}
-          <p className="text-slate-600 dark:text-neutral-400 text-base sm:text-lg leading-relaxed max-w-2xl">
-            Extract timestamps, subtitles, and metadata in seconds. Click any transcript sentence to jump and play the video right from that moment.
+          <p className="text-slate-600 dark:text-neutral-400 text-sm leading-relaxed">
+            Enter a YouTube link to fetch timestamps, read full subtitles, and click any line to play the video.
           </p>
-
-          {/* Feature Pills */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1 text-xs text-slate-600 dark:text-neutral-400">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-item">
-              <Zap className="w-3.5 h-3.5 text-amber-500" />
-              <span>Instant Extraction</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-item">
-              <Play className="w-3.5 h-3.5 text-red-500 fill-current" />
-              <span>Click-to-Seek Video</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-item">
-              <Globe className="w-3.5 h-3.5 text-blue-500" />
-              <span>Multi-Language Subtitles</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-item">
-              <Download className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Export .TXT & .SRT</span>
-            </span>
-          </div>
         </section>
 
-        {/* Search & Input Box with Frosted Glass */}
-        <section className="w-full max-w-3xl mx-auto flex flex-col gap-3">
+        {/* Input Bar */}
+        <section className="w-full max-w-2xl mx-auto flex flex-col gap-2.5">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleFetchTranscript();
             }}
-            className="group relative flex flex-col sm:flex-row items-center gap-2 p-2.5 rounded-2xl glass-search focus-within:border-red-500 focus-within:ring-4 focus-within:ring-red-500/20 transition-all duration-300"
+            className="flex flex-col sm:flex-row items-center gap-2 p-1.5 rounded-xl glass-search"
           >
             <div className="relative flex-1 w-full flex items-center">
-              <div className="absolute left-3.5 p-1.5 rounded-xl bg-slate-100 dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-500 dark:text-neutral-400 group-focus-within:text-red-500 transition">
+              <div className="absolute left-3 text-red-600">
                 <YoutubeIcon className="w-4 h-4" />
               </div>
               <input
                 type="text"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="Paste YouTube URL (e.g. https://www.youtube.com/watch?v=...)"
-                className="w-full pl-14 pr-10 py-3 bg-transparent text-sm sm:text-base text-slate-900 dark:text-neutral-100 placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-none"
+                placeholder="Paste YouTube video or Shorts link..."
+                className="w-full pl-9 pr-8 py-2.5 bg-transparent text-sm text-slate-900 dark:text-neutral-100 placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-none"
               />
               {url && (
                 <button
                   type="button"
                   onClick={() => setUrl("")}
-                  className="absolute right-3 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:text-neutral-400 dark:hover:text-neutral-200 hover:bg-slate-200/50 dark:hover:bg-neutral-800 transition"
+                  className="absolute right-2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"
                   title="Clear input"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
               {!url && (
                 <button
                   type="button"
                   onClick={handlePaste}
-                  className="px-3.5 py-3 text-xs sm:text-sm font-medium text-slate-700 dark:text-neutral-300 bg-slate-100 dark:bg-neutral-800/90 hover:bg-slate-200 dark:hover:bg-neutral-700 border border-slate-200 dark:border-neutral-700/60 rounded-xl transition flex items-center gap-1.5 active:scale-95 shrink-0 cursor-pointer"
+                  className="px-3 py-2 text-xs font-medium text-slate-600 dark:text-neutral-300 hover:bg-slate-100 dark:hover:bg-neutral-800 rounded-lg transition flex items-center gap-1 cursor-pointer"
                   title="Paste from clipboard"
                 >
-                  <Copy className="w-3.5 h-3.5 text-slate-500 dark:text-neutral-400" />
+                  <Copy className="w-3.5 h-3.5" />
                   <span>Paste</span>
                 </button>
               )}
@@ -460,29 +365,26 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={loading || !url.trim()}
-                className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-600 disabled:from-slate-300 disabled:to-slate-300 dark:disabled:from-neutral-800 dark:disabled:to-neutral-800 disabled:text-slate-500 dark:disabled:text-neutral-500 text-white text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 disabled:pointer-events-none shrink-0 cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-200 dark:disabled:bg-neutral-800 disabled:text-slate-400 dark:disabled:text-neutral-500 text-white text-xs sm:text-sm font-medium rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 disabled:pointer-events-none cursor-pointer"
               >
                 {loading ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Processing...</span>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Fetching...</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Get Transcript</span>
+                    <span>Fetch</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </>
                 )}
               </button>
             </div>
           </form>
 
-          {/* Quick sample chips */}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-neutral-400 pt-1">
-            <span className="font-medium flex items-center gap-1 text-slate-600 dark:text-neutral-400">
-              <Zap className="w-3 h-3 text-amber-500" />
-              <span>Try Samples:</span>
-            </span>
+          {/* Quick Samples & Options */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-neutral-400 px-1">
+            <span>Examples:</span>
             {SAMPLE_VIDEOS.map((sample) => (
               <button
                 key={sample.url}
@@ -491,84 +393,73 @@ export default function Home() {
                   setUrl(sample.url);
                   handleFetchTranscript(sample.url);
                 }}
-                className="px-3 py-1.5 rounded-xl glass-item hover:border-red-500/40 text-slate-600 dark:text-neutral-300 hover:text-red-600 dark:hover:text-white transition flex items-center gap-1.5 cursor-pointer"
+                className="hover:text-red-600 dark:hover:text-red-400 transition underline underline-offset-2 cursor-pointer"
               >
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 font-mono">
-                  {sample.tag}
-                </span>
-                <span>{sample.title}</span>
+                {sample.title}
               </button>
             ))}
 
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="ml-auto text-slate-500 dark:text-neutral-500 hover:text-slate-800 dark:hover:text-neutral-300 text-xs flex items-center gap-1 transition cursor-pointer"
+              className="ml-auto text-slate-500 dark:text-neutral-500 hover:text-slate-800 dark:hover:text-neutral-200 text-xs flex items-center gap-1 transition cursor-pointer"
             >
               <Sliders className="w-3 h-3" />
-              <span>{showAdvanced ? "Hide Advanced" : "Advanced (Cookies/Private)"}</span>
+              <span>{showAdvanced ? "Hide Options" : "Session Cookie"}</span>
             </button>
           </div>
 
           {/* Advanced Session Cookie Box */}
           {showAdvanced && (
-            <div className="p-4 rounded-2xl glass-card flex flex-col gap-2.5 mt-1 transition animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-800 dark:text-neutral-200">
+            <div className="p-3 rounded-xl glass-card flex flex-col gap-2 mt-1">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-neutral-300">
                 <Key className="w-3.5 h-3.5 text-amber-500" />
-                <span>YouTube Session Cookie (Optional for Private/Members-only videos)</span>
+                <span>YouTube Session Cookie (Optional for Private/Restricted videos)</span>
               </div>
               <input
                 type="password"
                 value={cookie}
                 onChange={(e) => setCookie(e.target.value)}
-                placeholder="Paste YouTube cookie string (e.g. VISITOR_INFO1_LIVE=...; SID=...)"
-                className="w-full px-3.5 py-2.5 bg-white dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 rounded-xl text-xs text-slate-800 dark:text-neutral-200 placeholder-slate-400 dark:placeholder-neutral-600 focus:outline-none focus:border-red-500"
+                placeholder="Paste session cookie (e.g. VISITOR_INFO1_LIVE=...; SID=...)"
+                className="w-full px-3 py-2 bg-white dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 rounded-lg text-xs text-slate-800 dark:text-neutral-200 focus:outline-none focus:border-red-500"
               />
-              <p className="text-[11px] text-slate-500 dark:text-neutral-500 leading-relaxed">
-                Use your browser session cookie to access private, age-restricted, or members-only videos you have permission to view. Leave empty for public and unlisted videos.
+              <p className="text-[11px] text-slate-500 dark:text-neutral-500">
+                Only needed if you want to extract transcripts from private or members-only videos you have access to.
               </p>
             </div>
           )}
         </section>
 
-        {/* Error Notification Banner */}
+        {/* Error Notification */}
         {error && (
-          <div className="max-w-3xl mx-auto w-full p-4 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 flex items-start gap-3.5 text-red-900 dark:text-red-200 shadow-xl shadow-red-500/5 animate-in fade-in">
-            <div className="p-2 rounded-xl bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700/50 text-red-600 dark:text-red-400 shrink-0 mt-0.5">
-              <AlertCircle className="w-4 h-4" />
-            </div>
-            <div className="flex flex-col gap-1 text-sm">
-              <p className="font-semibold text-red-800 dark:text-red-300">Could not fetch transcript</p>
-              <p className="text-red-700 dark:text-red-300/80 text-xs sm:text-sm leading-relaxed">{error}</p>
+          <div className="max-w-2xl mx-auto w-full p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 flex items-start gap-3 text-red-900 dark:text-red-200 text-xs sm:text-sm">
+            <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+            <div className="flex flex-col gap-0.5">
+              <p className="font-medium text-red-800 dark:text-red-300">Unable to load transcript</p>
+              <p className="text-red-700 dark:text-red-300/80">{error}</p>
             </div>
           </div>
         )}
 
         {/* Loading Skeleton */}
         {loading && (
-          <div className="max-w-5xl mx-auto w-full flex flex-col gap-6 animate-pulse p-6 sm:p-8 rounded-3xl glass-card">
-            <div className="w-full aspect-video bg-slate-200 dark:bg-neutral-800/50 rounded-2xl" />
-            <div className="space-y-3 pt-2">
-              <div className="h-5 bg-slate-200 dark:bg-neutral-800/60 rounded w-2/3" />
-              <div className="h-4 bg-slate-200 dark:bg-neutral-800/40 rounded w-1/3" />
-            </div>
-            <div className="space-y-2.5 pt-4 border-t border-slate-200 dark:border-neutral-800/60">
-              <div className="h-4 bg-slate-200 dark:bg-neutral-800/30 rounded w-full" />
-              <div className="h-4 bg-slate-200 dark:bg-neutral-800/30 rounded w-5/6" />
-              <div className="h-4 bg-slate-200 dark:bg-neutral-800/30 rounded w-4/6" />
+          <div className="max-w-4xl mx-auto w-full flex flex-col gap-4 animate-pulse p-6 rounded-2xl glass-card">
+            <div className="w-full aspect-video bg-slate-200 dark:bg-neutral-800/50 rounded-xl" />
+            <div className="space-y-2 pt-2">
+              <div className="h-4 bg-slate-200 dark:bg-neutral-800/60 rounded w-1/2" />
+              <div className="h-3 bg-slate-200 dark:bg-neutral-800/40 rounded w-1/4" />
             </div>
           </div>
         )}
 
-        {/* Results Section (Interactive Video Player + Synchronized Transcript) */}
+        {/* Results View (Video Player + Transcript) */}
         {data && !loading && (
-          <section ref={playerSectionRef} className="flex flex-col gap-6 pt-4">
-            {/* Top Video Cinema & Actions Bar */}
+          <section ref={playerSectionRef} className="flex flex-col gap-6">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: Embedded Player & Video Info (5 cols) */}
-              <div className="lg:col-span-5 flex flex-col gap-4 lg:sticky lg:top-24">
-                {/* 16:9 Video Player */}
-                <div className="w-full aspect-video rounded-2xl overflow-hidden bg-black border border-slate-200 dark:border-neutral-800 shadow-2xl relative group">
+              {/* Left: Video Player & Details (5 cols) */}
+              <div className="lg:col-span-5 flex flex-col gap-3 lg:sticky lg:top-20">
+                {/* 16:9 Embedded Player */}
+                <div className="w-full aspect-video rounded-xl overflow-hidden bg-black border border-slate-200 dark:border-neutral-800 shadow-md">
                   <iframe
                     ref={iframeRef}
                     src={`https://www.youtube.com/embed/${data.metadata.id}?enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}`}
@@ -579,119 +470,96 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Video Info Details Card with Glassmorphism */}
-                <div className="p-5 rounded-3xl glass-card flex flex-col gap-3.5">
+                {/* Video Info */}
+                <div className="p-4 rounded-xl glass-card flex flex-col gap-2.5">
                   <a
                     href={`https://www.youtube.com/watch?v=${data.metadata.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group inline-flex items-start justify-between gap-2 font-bold text-base text-slate-900 dark:text-white hover:text-red-600 dark:hover:text-red-400 transition leading-snug"
+                    className="group font-medium text-sm text-slate-900 dark:text-white hover:text-red-600 dark:hover:text-red-400 transition inline-flex items-start justify-between gap-2"
                   >
-                    <span>{data.metadata.title}</span>
-                    <ExternalLink className="w-4 h-4 text-slate-400 dark:text-neutral-500 group-hover:text-red-500 shrink-0 mt-1 transition" />
+                    <span className="line-clamp-2">{data.metadata.title}</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                   </a>
 
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-neutral-400 pt-1 border-t border-slate-200 dark:border-neutral-800/80">
-                    <span className="font-semibold text-slate-800 dark:text-neutral-200">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-neutral-400">
+                    <span className="font-medium text-slate-700 dark:text-neutral-300">
                       {data.metadata.author}
                     </span>
-                    {data.metadata.viewCount && (
-                      <>
-                        <span>•</span>
-                        <span>{data.metadata.viewCount} views</span>
-                      </>
-                    )}
                     <span>•</span>
-                    <span className="flex items-center gap-1 text-slate-700 dark:text-neutral-300">
-                      <Clock className="w-3 h-3 text-slate-400" />
-                      <span>{data.metadata.durationFormatted}</span>
-                    </span>
+                    <span>{data.metadata.durationFormatted}</span>
+                    <span>•</span>
+                    <span>{data.segments.length} segments</span>
                   </div>
 
-                  {/* Synchronized Notice Badge */}
-                  <div className="inline-flex items-center gap-2 p-3 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-300 text-xs">
-                    <Play className="w-3.5 h-3.5 fill-current text-red-500 shrink-0" />
-                    <span>Click any line on the right to jump video to that exact moment.</span>
-                  </div>
+                  {/* Actions */}
+                  <div className="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-200 dark:border-neutral-800">
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(false)}
+                      className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-neutral-300 bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 dark:hover:bg-neutral-700 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {copiedType === "full" ? (
+                        <Check className="w-3.5 h-3.5 text-green-600" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                      <span>{copiedType === "full" ? "Copied" : "Copy Text"}</span>
+                    </button>
 
-                  {/* Export Actions Grid */}
-                  <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-neutral-800/80">
-                    <span className="text-xs font-semibold text-slate-500 dark:text-neutral-400 uppercase tracking-wider">
-                      Export & Download
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(false)}
-                        className="px-3 py-2 text-xs font-medium text-slate-700 dark:text-neutral-200 bg-white/70 dark:bg-neutral-950/80 hover:bg-slate-100 dark:hover:bg-neutral-850 border border-slate-200 dark:border-neutral-800 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                        title="Copy full text"
-                      >
-                        {copiedType === "full" ? (
-                          <Check className="w-3.5 h-3.5 text-green-500" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400" />
-                        )}
-                        <span>{copiedType === "full" ? "Copied!" : "Copy Full Text"}</span>
-                      </button>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(true)}
+                      className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-neutral-300 bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 dark:hover:bg-neutral-700 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {copiedType === "timestamps" ? (
+                        <Check className="w-3.5 h-3.5 text-green-600" />
+                      ) : (
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                      <span>{copiedType === "timestamps" ? "Copied" : "Copy + Time"}</span>
+                    </button>
 
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(true)}
-                        className="px-3 py-2 text-xs font-medium text-slate-700 dark:text-neutral-200 bg-white/70 dark:bg-neutral-950/80 hover:bg-slate-100 dark:hover:bg-neutral-850 border border-slate-200 dark:border-neutral-800 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                        title="Copy with timestamps"
-                      >
-                        {copiedType === "timestamps" ? (
-                          <Check className="w-3.5 h-3.5 text-green-500" />
-                        ) : (
-                          <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400" />
-                        )}
-                        <span>{copiedType === "timestamps" ? "Copied!" : "Copy + Time"}</span>
-                      </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadTxt}
+                      className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-neutral-300 bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 dark:hover:bg-neutral-700 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Download .TXT</span>
+                    </button>
 
-                      <button
-                        type="button"
-                        onClick={handleDownloadTxt}
-                        className="px-3 py-2 text-xs font-medium text-slate-700 dark:text-neutral-200 bg-white/70 dark:bg-neutral-950/80 hover:bg-slate-100 dark:hover:bg-neutral-850 border border-slate-200 dark:border-neutral-800 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                        title="Download TXT file"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400" />
-                        <span>Download .TXT</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleDownloadSrt}
-                        className="px-3 py-2 text-xs font-medium text-slate-700 dark:text-neutral-200 bg-white/70 dark:bg-neutral-950/80 hover:bg-slate-100 dark:hover:bg-neutral-850 border border-slate-200 dark:border-neutral-800 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                        title="Download SRT Subtitle file"
-                      >
-                        <FileCode className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-400" />
-                        <span>Download .SRT</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDownloadSrt}
+                      className="px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-neutral-300 bg-slate-100 dark:bg-neutral-800 hover:bg-slate-200 dark:hover:bg-neutral-700 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <FileCode className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Download .SRT</span>
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Right Column: Transcript Viewer & Search (7 cols) */}
-              <div className="lg:col-span-7 flex flex-col gap-4">
-                {/* Toolbar Card */}
-                <div className="p-3.5 rounded-3xl glass-card flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                  {/* Search Input */}
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-neutral-500" />
+              {/* Right: Transcript Reader (7 cols) */}
+              <div className="lg:col-span-7 flex flex-col gap-3">
+                {/* Search & Language Bar */}
+                <div className="p-2.5 rounded-xl glass-card flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                     <input
                       type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search inside transcript..."
-                      className="w-full pl-10 pr-8 py-2 bg-white/80 dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 rounded-xl text-xs sm:text-sm text-slate-900 dark:text-neutral-200 placeholder-slate-400 dark:placeholder-neutral-500 focus:outline-none focus:border-red-500"
+                      placeholder="Search within transcript..."
+                      className="w-full pl-8 pr-7 py-1.5 bg-white dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 rounded-lg text-xs text-slate-900 dark:text-neutral-100 placeholder-slate-400 focus:outline-none focus:border-red-500"
                     />
                     {searchQuery && (
                       <button
                         onClick={() => setSearchQuery("")}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-neutral-400 dark:hover:text-neutral-200 p-1"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="w-3 h-3" />
                       </button>
                     )}
                   </div>
@@ -703,9 +571,9 @@ export default function Home() {
                         <select
                           value={selectedLang}
                           onChange={(e) => handleLanguageChange(e.target.value)}
-                          className="appearance-none bg-white/80 dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 text-xs sm:text-sm text-slate-700 dark:text-neutral-300 py-2 pl-3 pr-8 rounded-xl focus:outline-none focus:border-red-500 cursor-pointer"
+                          className="appearance-none bg-white dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 text-xs text-slate-700 dark:text-neutral-300 py-1.5 pl-2.5 pr-7 rounded-lg focus:outline-none focus:border-red-500 cursor-pointer"
                         >
-                          <option value="default">Default Language</option>
+                          <option value="default">Default Track</option>
                           {data.availableLanguages.map((l, idx) => (
                             <option
                               key={`${l.id || l.languageCode}-${idx}`}
@@ -718,69 +586,60 @@ export default function Home() {
                             </option>
                           ))}
                         </select>
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-neutral-500 pointer-events-none" />
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                       </div>
                     )}
 
-                    {/* View Mode Toggle */}
-                    <div className="flex items-center p-1 bg-slate-200/70 dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 rounded-xl">
+                    {/* View Switcher */}
+                    <div className="flex items-center p-0.5 bg-slate-200 dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 rounded-lg">
                       <button
                         type="button"
                         onClick={() => setViewMode("segments")}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer ${
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
                           viewMode === "segments"
-                            ? "bg-white dark:bg-neutral-800 text-slate-900 dark:text-white shadow-sm"
-                            : "text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-neutral-200"
+                            ? "bg-white dark:bg-neutral-800 text-slate-900 dark:text-white shadow-xs"
+                            : "text-slate-600 dark:text-neutral-400"
                         }`}
-                        title="Timestamped Segments View"
                       >
-                        <List className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Segments</span>
+                        Segments
                       </button>
-
                       <button
                         type="button"
                         onClick={() => setViewMode("paragraph")}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition cursor-pointer ${
+                        className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
                           viewMode === "paragraph"
-                            ? "bg-white dark:bg-neutral-800 text-slate-900 dark:text-white shadow-sm"
-                            : "text-slate-600 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-neutral-200"
+                            ? "bg-white dark:bg-neutral-800 text-slate-900 dark:text-white shadow-xs"
+                            : "text-slate-600 dark:text-neutral-400"
                         }`}
-                        title="Continuous Paragraph View"
                       >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Full Text</span>
+                        Text
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Main Transcript Content Card */}
-                <div className="rounded-3xl glass-card p-5 sm:p-7 flex flex-col gap-4">
-                  {/* Search Match Info */}
+                {/* Transcript Viewer Box */}
+                <div className="rounded-xl glass-card p-4 sm:p-5 flex flex-col gap-3">
                   {searchQuery && (
-                    <div className="text-xs text-slate-500 dark:text-neutral-400 pb-3 border-b border-slate-200 dark:border-neutral-800/80 flex items-center justify-between">
+                    <div className="text-xs text-slate-500 dark:text-neutral-400 pb-2 border-b border-slate-200 dark:border-neutral-800 flex items-center justify-between">
                       <span>
-                        Found <strong className="text-slate-900 dark:text-neutral-200 font-semibold">{filteredSegments.length}</strong> matching segments for &ldquo;{searchQuery}&rdquo;
+                        Found <strong className="text-slate-900 dark:text-white">{filteredSegments.length}</strong> matching lines
                       </span>
                       <button
                         onClick={() => setSearchQuery("")}
-                        className="text-red-600 dark:text-red-400 hover:underline cursor-pointer"
+                        className="text-red-600 hover:underline cursor-pointer"
                       >
-                        Clear Filter
+                        Reset
                       </button>
                     </div>
                   )}
 
-                  {/* Empty Search Result */}
                   {filteredSegments.length === 0 ? (
-                    <div className="py-16 text-center text-slate-400 dark:text-neutral-500 text-sm flex flex-col items-center gap-2">
-                      <Search className="w-8 h-8 text-slate-400 dark:text-neutral-600" />
-                      <span>No matching transcript segments found.</span>
+                    <div className="py-12 text-center text-slate-400 dark:text-neutral-500 text-xs">
+                      No matching text found in transcript.
                     </div>
                   ) : viewMode === "segments" ? (
-                    /* Segments View */
-                    <div className="flex flex-col gap-2 max-h-[650px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="flex flex-col gap-1.5 max-h-[600px] overflow-y-auto pr-1.5 custom-scrollbar">
                       {filteredSegments.map((segment: TranscriptSegment, index: number) => {
                         const isActive = activeSegmentMs === segment.start_ms;
 
@@ -788,56 +647,52 @@ export default function Home() {
                           <div
                             key={`${segment.start_ms}-${index}`}
                             onClick={() => handleSeek(segment.start_ms)}
-                            className={`group relative flex items-start gap-3.5 p-3.5 rounded-2xl transition cursor-pointer border ${
+                            className={`group flex items-start gap-3 p-2 rounded-lg transition cursor-pointer border ${
                               isActive
-                                ? "bg-red-500/10 border-red-500/50 shadow-lg shadow-red-500/5 ring-1 ring-red-500/30"
-                                : "hover:bg-slate-200/50 dark:hover:bg-neutral-800/50 border-slate-200/60 dark:border-neutral-800/50"
+                                ? "bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/40"
+                                : "hover:bg-slate-100/70 dark:hover:bg-neutral-800/50 border-transparent"
                             }`}
                           >
-                            {/* Timestamp Play Badge */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleSeek(segment.start_ms);
                               }}
-                              className={`px-2.5 py-1.5 rounded-xl border font-mono text-xs font-semibold shrink-0 transition flex items-center gap-1.5 mt-0.5 cursor-pointer ${
+                              className={`px-2 py-0.5 rounded font-mono text-[11px] shrink-0 transition flex items-center gap-1 mt-0.5 cursor-pointer ${
                                 isActive
-                                  ? "bg-red-600 text-white border-red-500 shadow-md shadow-red-600/30"
-                                  : "bg-slate-100 dark:bg-neutral-950 border-slate-200 dark:border-neutral-800 text-slate-600 dark:text-neutral-400 group-hover:border-red-500/50 group-hover:text-red-600 dark:group-hover:text-red-400 group-hover:bg-red-500/10"
+                                  ? "bg-red-600 text-white"
+                                  : "bg-slate-200/80 dark:bg-neutral-800 text-slate-600 dark:text-neutral-400 group-hover:bg-red-600 group-hover:text-white"
                               }`}
-                              title="Click to play from this moment"
                             >
                               {isActive ? (
-                                <Volume2 className="w-3.5 h-3.5 text-white animate-pulse" />
+                                <Volume2 className="w-3 h-3 animate-pulse" />
                               ) : (
-                                <Play className="w-3.5 h-3.5 text-slate-400 dark:text-neutral-500 group-hover:text-red-500 fill-current" />
+                                <Play className="w-2.5 h-2.5 fill-current opacity-70 group-hover:opacity-100" />
                               )}
                               <span>{segment.startFormatted}</span>
                             </button>
 
-                            {/* Spoken Text */}
                             <p
-                              className={`text-sm sm:text-base leading-relaxed flex-1 transition ${
+                              className={`text-xs sm:text-sm leading-relaxed flex-1 ${
                                 isActive
                                   ? "text-slate-900 dark:text-white font-medium"
-                                  : "text-slate-700 dark:text-neutral-300 group-hover:text-slate-900 dark:group-hover:text-neutral-100"
+                                  : "text-slate-700 dark:text-neutral-300"
                               }`}
                             >
                               {highlightText(segment.text, searchQuery)}
                             </p>
 
-                            {/* Copy Single Segment Button on Hover */}
                             <button
                               type="button"
                               onClick={(e) => handleCopySegment(segment.text, index, e)}
-                              className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-white dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white transition shrink-0 cursor-pointer shadow-sm"
-                              title="Copy this line"
+                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white transition shrink-0 cursor-pointer"
+                              title="Copy line"
                             >
                               {copiedSegmentIdx === index ? (
-                                <Check className="w-3.5 h-3.5 text-green-500" />
+                                <Check className="w-3 h-3 text-green-600" />
                               ) : (
-                                <Copy className="w-3.5 h-3.5" />
+                                <Copy className="w-3 h-3" />
                               )}
                             </button>
                           </div>
@@ -845,20 +700,19 @@ export default function Home() {
                       })}
                     </div>
                   ) : (
-                    /* Paragraph / Full Text View */
-                    <div className="max-h-[650px] overflow-y-auto pr-3 text-sm sm:text-base leading-loose select-text space-y-1 custom-scrollbar">
+                    <div className="max-h-[600px] overflow-y-auto pr-2 text-xs sm:text-sm leading-relaxed select-text space-y-1 custom-scrollbar">
                       {data.segments.map((seg, idx) => {
                         const isActive = activeSegmentMs === seg.start_ms;
                         return (
                           <span
                             key={idx}
                             onClick={() => handleSeek(seg.start_ms)}
-                            className={`cursor-pointer px-1 py-0.5 rounded-lg transition inline-block ${
+                            className={`cursor-pointer px-1 py-0.5 rounded transition inline-block ${
                               isActive
-                                ? "bg-red-500/25 dark:bg-red-500/30 text-slate-900 dark:text-white font-semibold border-b-2 border-red-500 shadow-sm"
-                                : "text-slate-700 dark:text-neutral-300 hover:bg-slate-200/70 dark:hover:bg-neutral-800/80 hover:text-slate-900 dark:hover:text-white"
+                                ? "bg-red-100 dark:bg-red-500/20 text-slate-900 dark:text-white font-medium underline decoration-red-500"
+                                : "text-slate-700 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800"
                             }`}
-                            title={`Click to play from ${seg.startFormatted}`}
+                            title={`Jump to ${seg.startFormatted}`}
                           >
                             {highlightText(seg.text, searchQuery)}{" "}
                           </span>
@@ -872,86 +726,26 @@ export default function Home() {
           </section>
         )}
 
-        {/* Landing Page Content (Shown when no video is loaded) */}
+        {/* Empty State / How to use guide */}
         {!data && !loading && (
-          <div className="flex flex-col gap-16 pt-8 pb-12">
-            {/* How It Works Section */}
-            <section className="flex flex-col items-center gap-8">
-              <div className="text-center flex flex-col gap-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-red-600 dark:text-red-500">
-                  Workflow
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
-                  How It Works in 3 Simple Steps
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-                {HOW_IT_WORKS.map((item) => (
-                  <div
-                    key={item.step}
-                    className="p-6 rounded-3xl glass-card flex flex-col gap-4 relative overflow-hidden group hover:border-red-500/30 transition"
-                  >
-                    <div className="text-3xl font-black text-slate-300 dark:text-neutral-800 group-hover:text-red-500/40 transition">
-                      {item.step}
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">{item.title}</h3>
-                    <p className="text-slate-600 dark:text-neutral-400 text-sm leading-relaxed">{item.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Features Grid */}
-            <section className="flex flex-col items-center gap-8">
-              <div className="text-center flex flex-col gap-2">
-                <span className="text-xs font-bold uppercase tracking-widest text-red-600 dark:text-red-500">
-                  Features
-                </span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white">
-                  Everything You Need for Video Transcription
-                </h2>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 w-full">
-                {FEATURES.map((feature, idx) => {
-                  const Icon = feature.icon;
-                  return (
-                    <div
-                      key={idx}
-                      className="p-6 rounded-3xl glass-card hover:border-red-500/40 transition flex flex-col gap-3 group"
-                    >
-                      <div className="w-10 h-10 rounded-2xl bg-white dark:bg-neutral-950 border border-slate-200 dark:border-neutral-800 flex items-center justify-center text-red-600 dark:text-red-500 group-hover:scale-110 transition shadow-sm">
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-neutral-200">{feature.title}</h3>
-                      <p className="text-slate-600 dark:text-neutral-400 text-xs leading-relaxed">{feature.desc}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
+          <div className="max-w-2xl mx-auto w-full flex flex-col gap-4 text-xs text-slate-500 dark:text-neutral-400 pt-4">
+            <div className="p-4 rounded-xl glass-card flex flex-col gap-2.5">
+              <span className="font-semibold text-slate-800 dark:text-neutral-200">
+                Supported Links:
+              </span>
+              <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-neutral-400">
+                <li>Standard videos: <code className="text-slate-800 dark:text-neutral-300 font-mono">youtube.com/watch?v=...</code></li>
+                <li>Short URLs: <code className="text-slate-800 dark:text-neutral-300 font-mono">youtu.be/...</code></li>
+                <li>YouTube Shorts: <code className="text-slate-800 dark:text-neutral-300 font-mono">youtube.com/shorts/...</code></li>
+              </ul>
+            </div>
           </div>
         )}
       </main>
 
-      {/* Footer with Glassmorphism */}
-      <footer className="w-full glass-nav mt-auto py-8 transition-colors duration-300">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-neutral-500">
-          <div className="flex items-center gap-2">
-            <YoutubeIcon className="w-4 h-4 text-red-500" />
-            <span className="font-semibold text-slate-700 dark:text-neutral-400">TranscriptTube</span>
-            <span>• Next.js & Cloudflare Workers</span>
-          </div>
-
-          <div className="flex items-center gap-4 text-slate-600 dark:text-neutral-400">
-            <span>Fast & Free</span>
-            <span>•</span>
-            <span>Zero Tracking</span>
-            <span>•</span>
-            <span>Serverless Edge</span>
-          </div>
-        </div>
+      {/* Clean Minimal Footer */}
+      <footer className="w-full border-t border-slate-200 dark:border-neutral-800 mt-auto py-6 text-center text-xs text-slate-400 dark:text-neutral-500">
+        <p>Built with Next.js & Cloudflare Workers</p>
       </footer>
     </div>
   );
@@ -971,7 +765,7 @@ function highlightText(text: string, query: string) {
     part.toLowerCase() === query.toLowerCase() ? (
       <mark
         key={i}
-        className="bg-amber-300/60 dark:bg-amber-400/30 text-amber-950 dark:text-amber-200 px-1 py-0.5 rounded border-b-2 border-amber-500 font-medium"
+        className="bg-amber-200 dark:bg-amber-400/30 text-slate-900 dark:text-amber-200 px-0.5 rounded font-medium"
       >
         {part}
       </mark>
