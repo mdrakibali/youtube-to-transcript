@@ -103,7 +103,7 @@ export function extractVideoId(input: string): string | null {
 }
 
 /**
- * Formats seconds or milliseconds strictly into HH:MM:SS format
+ * Formats seconds or milliseconds cleanly as M:SS (e.g. 0:00, 1:00, 2:05) or H:MM:SS (e.g. 1:04:20)
  */
 export function formatTimestamp(secondsOrMs: number, isMs = false): string {
   const totalSeconds = Math.max(0, Math.floor(isMs ? secondsOrMs / 1000 : secondsOrMs));
@@ -113,7 +113,10 @@ export function formatTimestamp(secondsOrMs: number, isMs = false): string {
 
   const pad = (num: number) => num.toString().padStart(2, "0");
 
-  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+  return `${minutes}:${pad(seconds)}`;
 }
 
 /**
