@@ -1,6 +1,7 @@
 "use server";
 
 import { extractVideoId, fetchYouTubeTranscript, type TranscriptResponse } from "@/lib/youtube";
+import { fetchTranscriptViaYoutubeTranscript } from "@/lib/youtube-transcript";
 
 export interface TranscriptActionResult {
   success: boolean;
@@ -10,7 +11,9 @@ export interface TranscriptActionResult {
 }
 
 /**
- * Next.js Server Action to fetch YouTube transcripts and metadata directly.
+ * Next.js Server Action to fetch YouTube transcripts with dual-engine fallback.
+ * Engine 1: InnerTube Android + Web scraping (Full metadata & multi-language)
+ * Engine 2: youtube-transcript package (Secondary extractor)
  */
 export async function getTranscriptAction(input: {
   url: string;
@@ -29,7 +32,6 @@ export async function getTranscriptAction(input: {
     }
 
     const videoId = extractVideoId(url);
-    console.log("Extracted video ID:", videoId);
     if (!videoId) {
       return {
         success: false,
@@ -42,15 +44,33 @@ export async function getTranscriptAction(input: {
     // Support optional environment variable cookie
     const effectiveCookie = cookie?.trim() || process.env.YOUTUBE_COOKIE;
 
-    const data = await fetchYouTubeTranscript(videoId, {
-      lang: lang === "default" ? undefined : lang,
-      cookie: effectiveCookie,
-    });
+    // 1. Try Primary Engine (InnerTube + Web Scraper)
+    try {
+      const data = await fetchYouTubeTranscript(videoId, {
+        lang: lang === "default" ? undefined : lang,
+        cookie: effectiveCookie,
+      });
 
-    return {
-      success: true,
-      data,
-    };
+      return {
+        success: true,
+        data,
+      };
+    } catch (primaryError: unknown) {
+      console.warn("Primary transcript engine failed, trying secondary youtube-transcript engine:", primaryError);
+
+      // 2. Fallback to Secondary Engine (youtube-transcript)
+      try {
+        const fallbackData = await fetchTranscriptViaYoutubeTranscript(videoId, lang);
+        return {
+          success: true,
+          data: fallbackData,
+        };
+      } catch (fallbackError: unknown) {
+        console.error("Secondary transcript engine also failed:", fallbackError);
+        // Throw original primary error to provide best error message
+        throw primaryError;
+      }
+    }
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
 
@@ -68,4 +88,3 @@ export async function getTranscriptAction(input: {
     };
   }
 }
-

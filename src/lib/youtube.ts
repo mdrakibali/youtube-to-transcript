@@ -120,7 +120,7 @@ export function formatTimestamp(secondsOrMs: number, isMs = false): string {
 /**
  * Decodes common HTML entities in transcript XML text.
  */
-function decodeEntities(text: string): string {
+export function decodeEntities(text: string): string {
   return text
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
