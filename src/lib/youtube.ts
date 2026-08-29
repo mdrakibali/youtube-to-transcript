@@ -111,10 +111,7 @@ export function formatTimestamp(secondsOrMs: number, isMs = false): string {
 
   const pad = (num: number) => num.toString().padStart(2, "0");
 
-  if (hours > 0) {
-    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
-  }
-  return `${pad(minutes)}:${pad(seconds)}`;
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
 }
 
 /**

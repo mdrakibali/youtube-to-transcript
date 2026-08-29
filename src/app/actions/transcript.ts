@@ -1,7 +1,11 @@
 "use server";
 
-import { extractVideoId, fetchYouTubeTranscript, type TranscriptResponse } from "@/lib/youtube";
-import { fetchTranscriptViaYoutubeTranscript } from "@/lib/youtube-transcript";
+import {
+  extractVideoId,
+  fetchYouTubeTranscript,
+  fetchTranscriptViaYoutubeTranscript,
+  type TranscriptResponse,
+} from "@/lib/youtube-transcript";
 
 export interface TranscriptActionResult {
   success: boolean;
@@ -12,8 +16,8 @@ export interface TranscriptActionResult {
 
 /**
  * Next.js Server Action to fetch YouTube transcripts with dual-engine fallback.
- * Engine 1: InnerTube Android + Web scraping (Full metadata & multi-language)
- * Engine 2: youtube-transcript package (Secondary extractor)
+ * Primary: Multi-Track InnerTube & Web Engine (Smart language selection & full metadata)
+ * Fallback: youtube-transcript package engine
  */
 export async function getTranscriptAction(input: {
   url: string;
@@ -44,7 +48,7 @@ export async function getTranscriptAction(input: {
     // Support optional environment variable cookie
     const effectiveCookie = cookie?.trim() || process.env.YOUTUBE_COOKIE;
 
-    // 1. Try Primary Engine (InnerTube + Web Scraper)
+    // 1. Try Primary Engine (Smart Language Selection & Multi-Track InnerTube)
     try {
       const data = await fetchYouTubeTranscript(videoId, {
         lang: lang === "default" ? undefined : lang,
@@ -56,7 +60,7 @@ export async function getTranscriptAction(input: {
         data,
       };
     } catch (primaryError: unknown) {
-      console.warn("Primary transcript engine failed, trying secondary youtube-transcript engine:", primaryError);
+      console.warn("Primary engine failed, falling back to secondary engine:", primaryError);
 
       // 2. Fallback to Secondary Engine (youtube-transcript)
       try {
@@ -66,9 +70,20 @@ export async function getTranscriptAction(input: {
           data: fallbackData,
         };
       } catch (fallbackError: unknown) {
-        console.error("Secondary transcript engine also failed:", fallbackError);
-        // Throw original primary error to provide best error message
-        throw primaryError;
+        console.error("Both transcript engines failed:", fallbackError);
+        const errorMessage =
+          primaryError instanceof Error ? primaryError.message : String(primaryError);
+
+        let errorCode = "NO_TRANSCRIPT";
+        if (errorMessage.startsWith("PRIVATE_VIDEO:")) {
+          errorCode = "PRIVATE_VIDEO";
+        }
+
+        return {
+          success: false,
+          error: errorCode,
+          message: errorMessage.replace(/^[A-Z_]+:\s*/, ""),
+        };
       }
     }
   } catch (error: unknown) {

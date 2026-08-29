@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useTransition, useMemo, useRef } from "react";
-import dynamic from "next/dynamic";
 import {
   Search,
   Copy,
@@ -24,14 +23,8 @@ import {
   Moon,
   ArrowRight,
 } from "lucide-react";
-import type { TranscriptResponse, TranscriptSegment } from "@/lib/youtube";
+import type { TranscriptResponse, TranscriptSegment } from "@/lib/youtube-transcript";
 import { getTranscriptAction } from "@/app/actions/transcript";
-
-// Dynamically import ReactPlayer with SSR disabled
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const ReactPlayer = dynamic<any>(() => import("react-player"), {
-  ssr: false,
-});
 
 function YoutubeIcon({ className = "w-5 h-5" }: { className?: string }) {
   return (
@@ -70,10 +63,8 @@ export default function Home() {
 
   // Theme State (Dark / Light)
   const [isDark, setIsDark] = useState(true);
-  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
-    setHasMounted(true);
     const savedTheme = localStorage.getItem("theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const initialDark = savedTheme ? savedTheme === "dark" : prefersDark;
@@ -98,11 +89,11 @@ export default function Home() {
     }
   };
 
-  // React Player ref and playing state
+  // Video player references & active tracking states
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const playerRef = useRef<any>(null);
+  const ytPlayerRef = useRef<any>(null);
+  const timeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const playerSectionRef = useRef<HTMLDivElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [activeSegmentMs, setActiveSegmentMs] = useState<number | null>(null);
   const [copiedSegmentIdx, setCopiedSegmentIdx] = useState<number | null>(null);
 
@@ -117,25 +108,152 @@ export default function Home() {
 
   // Seek video to exact timestamp and start playback
   const handleSeek = (start_ms: number) => {
-    const seconds = start_ms / 1000;
+    const seconds = Math.floor(start_ms / 1000);
     setActiveSegmentMs(start_ms);
-    setIsPlaying(true);
 
-    if (playerRef.current) {
+    if (ytPlayerRef.current) {
       try {
-        if (typeof playerRef.current.seekTo === "function") {
-          playerRef.current.seekTo(seconds, "seconds");
-        } else if ("currentTime" in playerRef.current) {
-          playerRef.current.currentTime = seconds;
+        if (typeof ytPlayerRef.current.seekTo === "function") {
+          ytPlayerRef.current.seekTo(seconds, true);
         }
-        if (typeof playerRef.current.play === "function") {
-          playerRef.current.play();
+        if (typeof ytPlayerRef.current.playVideo === "function") {
+          ytPlayerRef.current.playVideo();
         }
       } catch (err) {
         console.warn("Player seek error:", err);
       }
     }
   };
+
+  // Transcript scroll container ref
+  const transcriptScrollRef = useRef<HTMLDivElement>(null);
+
+  // Handle auto-highlighting and container-only auto-scrolling when playback progresses
+  const handleTimeUpdate = (currentMs: number) => {
+    if (!data?.segments || data.segments.length === 0) return;
+
+    // Find current active segment based on playback timestamp
+    const activeSeg =
+      data.segments.find((seg) => currentMs >= seg.start_ms && currentMs < seg.end_ms) ||
+      data.segments.find((seg, i, arr) => {
+        const nextSeg = arr[i + 1];
+        return currentMs >= seg.start_ms && (!nextSeg || currentMs < nextSeg.start_ms);
+      });
+
+    if (activeSeg && activeSeg.start_ms !== activeSegmentMs) {
+      setActiveSegmentMs(activeSeg.start_ms);
+
+      const container = transcriptScrollRef.current;
+      const elId =
+        viewMode === "segments"
+          ? `segment-${activeSeg.start_ms}`
+          : `segment-p-${activeSeg.start_ms}`;
+      const element = document.getElementById(elId);
+
+      if (container && element) {
+        const containerRect = container.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+        const relativeTop = elementRect.top - containerRect.top;
+
+        // Smoothly scroll only within the transcript box without moving the window
+        if (relativeTop < 20 || relativeTop > containerRect.height - 80) {
+          container.scrollTo({
+            top: container.scrollTop + relativeTop - containerRect.height / 3,
+            behavior: "smooth",
+          });
+        }
+      }
+    }
+  };
+
+  // Initialize YouTube Iframe Player API and continuous sync timer
+  useEffect(() => {
+    if (!data?.metadata?.id) return;
+
+    // Clear previous sync interval
+    if (timeIntervalRef.current) {
+      clearInterval(timeIntervalRef.current);
+      timeIntervalRef.current = null;
+    }
+
+    const initPlayer = () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const win = window as any;
+      if (!win.YT || !win.YT.Player) return;
+
+      const container = document.getElementById("youtube-player-frame");
+      if (!container) return;
+
+      // Clean up previous instance
+      if (ytPlayerRef.current && typeof ytPlayerRef.current.destroy === "function") {
+        ytPlayerRef.current.destroy();
+      }
+
+      ytPlayerRef.current = new win.YT.Player("youtube-player-frame", {
+        videoId: data.metadata.id,
+        playerVars: {
+          enablejsapi: 1,
+          rel: 0,
+          modestbranding: 1,
+          iv_load_policy: 3,
+          playsinline: 1,
+          controls: 1,
+          fs: 1,
+          origin: window.location.origin,
+        },
+        events: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onStateChange: (event: any) => {
+            // YT.PlayerState.PLAYING is 1
+            if (event.data === 1) {
+              if (timeIntervalRef.current) clearInterval(timeIntervalRef.current);
+              timeIntervalRef.current = setInterval(() => {
+                if (
+                  ytPlayerRef.current &&
+                  typeof ytPlayerRef.current.getCurrentTime === "function"
+                ) {
+                  const currentSec = ytPlayerRef.current.getCurrentTime();
+                  if (typeof currentSec === "number") {
+                    handleTimeUpdate(currentSec * 1000);
+                  }
+                }
+              }, 250);
+            } else {
+              if (timeIntervalRef.current) {
+                clearInterval(timeIntervalRef.current);
+                timeIntervalRef.current = null;
+              }
+            }
+          },
+        },
+      });
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const win = window as any;
+    if (!win.YT) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName("script")[0];
+      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+      win.onYouTubeIframeAPIReady = () => {
+        initPlayer();
+      };
+    } else if (win.YT.loaded) {
+      initPlayer();
+    } else {
+      win.onYouTubeIframeAPIReady = () => {
+        initPlayer();
+      };
+    }
+
+    return () => {
+      if (timeIntervalRef.current) {
+        clearInterval(timeIntervalRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.metadata?.id]);
 
   // Handle Form Submission
   const handleFetchTranscript = async (
@@ -150,7 +268,6 @@ export default function Home() {
     setLoading(true);
     setError(null);
     setActiveSegmentMs(null);
-    setIsPlaying(false);
 
     try {
       const result = await getTranscriptAction({
@@ -505,38 +622,14 @@ export default function Home() {
         {data && !loading && (
           <section ref={playerSectionRef} className="flex flex-col gap-6">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left Column: React Player & Details (5 cols) */}
+              {/* Left Column: Official Clean YouTube Player & Details (5 cols) */}
               <div className="lg:col-span-5 flex flex-col gap-4 lg:sticky lg:top-20">
-                {/* 16:9 ReactPlayer with Clean Controls & Hidden YouTube Extras */}
+                {/* 16:9 Cinema-Framed YouTube Player (Top Title Bar Hidden) */}
                 <div className="w-full aspect-video rounded-2xl overflow-hidden bg-black border border-slate-200 dark:border-neutral-800 shadow-xl relative">
-                  {hasMounted ? (
-                    <ReactPlayer
-                      ref={playerRef}
-                      url={`https://www.youtube.com/watch?v=${data.metadata.id}`}
-                      width="100%"
-                      height="100%"
-                      playing={isPlaying}
-                      controls={true}
-                      playsinline={true}
-                      config={{
-                        youtube: {
-                          playerVars: {
-                            modestbranding: 1,
-                            rel: 0,
-                            showinfo: 0,
-                            iv_load_policy: 3,
-                            playsinline: 1,
-                            disablekb: 0,
-                            fs: 1,
-                          },
-                        },
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-black flex items-center justify-center text-neutral-500 text-xs">
-                      Loading Player...
-                    </div>
-                  )}
+                  <div
+                    id="youtube-player-frame"
+                    className="absolute -top-[10%] left-0 w-full h-[120%]"
+                  />
                 </div>
 
                 {/* Video Info Details Card */}
@@ -617,7 +710,7 @@ export default function Home() {
 
               {/* Right Column: Transcript Reader (7 cols) */}
               <div className="lg:col-span-7 flex flex-col gap-4">
-                {/* Search & Language Bar */}
+                {/* Search & Language Bar (Auto-scroll button removed, runs automatically) */}
                 <div className="p-3 rounded-2xl ui-card flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                   <div className="relative flex-1">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -638,7 +731,7 @@ export default function Home() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 justify-end">
+                  <div className="flex flex-wrap items-center gap-2 justify-end">
                     {/* Language Selector */}
                     {data.availableLanguages && data.availableLanguages.length > 0 && (
                       <div className="relative">
@@ -716,17 +809,21 @@ export default function Home() {
                       <span>No matching text found in transcript.</span>
                     </div>
                   ) : viewMode === "segments" ? (
-                    <div className="flex flex-col gap-1.5 max-h-[620px] overflow-y-auto pr-1.5 custom-scrollbar">
+                    <div
+                      ref={transcriptScrollRef}
+                      className="flex flex-col gap-1.5 max-h-[620px] overflow-y-auto pr-1.5 custom-scrollbar scroll-smooth"
+                    >
                       {filteredSegments.map((segment: TranscriptSegment, index: number) => {
                         const isActive = activeSegmentMs === segment.start_ms;
 
                         return (
                           <div
                             key={`${segment.start_ms}-${index}`}
+                            id={`segment-${segment.start_ms}`}
                             onClick={() => handleSeek(segment.start_ms)}
-                            className={`group flex items-start gap-3 p-3 rounded-xl transition cursor-pointer border ${
+                            className={`group flex items-start gap-3 p-3 rounded-xl transition duration-150 cursor-pointer border ${
                               isActive
-                                ? "bg-red-50/80 dark:bg-red-500/10 border-red-200 dark:border-red-500/40 shadow-xs"
+                                ? "bg-red-50/90 dark:bg-red-500/15 border-red-300 dark:border-red-500/50 shadow-xs ring-1 ring-red-500/20"
                                 : "hover:bg-slate-100/70 dark:hover:bg-neutral-800/50 border-transparent"
                             }`}
                           >
@@ -743,7 +840,7 @@ export default function Home() {
                               }`}
                             >
                               {isActive ? (
-                                <Volume2 className="w-3.5 h-3.5 animate-pulse" />
+                                <Volume2 className="w-3.5 h-3.5 animate-pulse text-white" />
                               ) : (
                                 <Play className="w-3 h-3 fill-current opacity-70 group-hover:opacity-100" />
                               )}
@@ -751,7 +848,7 @@ export default function Home() {
                             </button>
 
                             <p
-                              className={`text-sm leading-relaxed flex-1 ${
+                              className={`text-sm leading-relaxed flex-1 transition-colors ${
                                 isActive
                                   ? "text-slate-900 dark:text-white font-medium"
                                   : "text-slate-700 dark:text-neutral-300"
@@ -777,16 +874,20 @@ export default function Home() {
                       })}
                     </div>
                   ) : (
-                    <div className="max-h-[620px] overflow-y-auto pr-2 text-sm leading-loose select-text space-y-1 custom-scrollbar">
+                    <div
+                      ref={transcriptScrollRef}
+                      className="max-h-[620px] overflow-y-auto pr-2 text-sm leading-loose select-text space-y-1 custom-scrollbar scroll-smooth"
+                    >
                       {data.segments.map((seg, idx) => {
                         const isActive = activeSegmentMs === seg.start_ms;
                         return (
                           <span
                             key={idx}
+                            id={`segment-p-${seg.start_ms}`}
                             onClick={() => handleSeek(seg.start_ms)}
                             className={`cursor-pointer px-1 py-0.5 rounded-md transition inline-block ${
                               isActive
-                                ? "bg-red-100 dark:bg-red-500/20 text-slate-900 dark:text-white font-medium underline decoration-red-500"
+                                ? "bg-red-100 dark:bg-red-500/20 text-slate-900 dark:text-white font-medium underline decoration-red-500 ring-1 ring-red-500/30"
                                 : "text-slate-700 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-neutral-800"
                             }`}
                             title={`Jump to ${seg.startFormatted}`}
@@ -803,46 +904,7 @@ export default function Home() {
           </section>
         )}
 
-        {/* Empty State Showcase */}
-        {!data && !loading && (
-          <div className="max-w-4xl mx-auto w-full grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4">
-            <div className="p-6 rounded-2xl ui-card flex flex-col gap-3">
-              <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-950/60 text-red-600 flex items-center justify-center">
-                <Play className="w-4 h-4 fill-current" />
-              </div>
-              <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                Interactive Video Playback
-              </h3>
-              <p className="text-slate-600 dark:text-neutral-400 text-xs sm:text-sm leading-relaxed">
-                Click any line in the transcript to jump the video directly to that exact second.
-              </p>
-            </div>
 
-            <div className="p-6 rounded-2xl ui-card flex flex-col gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center">
-                <Download className="w-4 h-4" />
-              </div>
-              <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                Subtitle & Text Exports
-              </h3>
-              <p className="text-slate-600 dark:text-neutral-400 text-xs sm:text-sm leading-relaxed">
-                Export clean transcripts with timestamps as SubRip (.SRT) and plain text (.TXT).
-              </p>
-            </div>
-
-            <div className="p-6 rounded-2xl ui-card flex flex-col gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center">
-                <Search className="w-4 h-4" />
-              </div>
-              <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                Instant Keyword Search
-              </h3>
-              <p className="text-slate-600 dark:text-neutral-400 text-xs sm:text-sm leading-relaxed">
-                Search through long speeches, podcasts, and tutorials with live match highlights.
-              </p>
-            </div>
-          </div>
-        )}
       </main>
 
       {/* Modern Multi-column Footer */}
