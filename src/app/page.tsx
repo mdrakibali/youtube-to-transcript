@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useTransition, useMemo } from "react";
 import Image from "next/image";
 import {
@@ -21,6 +20,7 @@ import {
   Play,
 } from "lucide-react";
 import type { TranscriptResponse, TranscriptSegment } from "@/lib/youtube";
+import { getTranscriptAction } from "@/app/actions/transcript";
 
 function YoutubeIcon({ className = "w-5 h-5" }: { className?: string }) {
   return (
@@ -77,25 +77,19 @@ export default function Home() {
     setError(null);
 
     try {
-      const res = await fetch("/api/transcript", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: targetUrl.trim(),
-          lang: langCode === "default" ? undefined : langCode,
-          cookie: cookie.trim() || undefined,
-        }),
+      const result = await getTranscriptAction({
+        url: targetUrl.trim(),
+        lang: langCode === "default" ? undefined : langCode,
+        cookie: cookie.trim() || undefined,
       });
 
-      const json = await res.json();
-
-      if (!res.ok || !json.success) {
-        throw new Error(json.message || "ট্রান্সক্রিপ্ট আনতে সমস্যা হয়েছে।");
+      if (!result.success || !result.data) {
+        throw new Error(result.message || "ট্রান্সক্রিপ্ট আনতে সমস্যা হয়েছে।");
       }
 
-      setData(json.data);
-      if (json.data.selectedLanguage) {
-        setSelectedLang(json.data.selectedLanguage);
+      setData(result.data);
+      if (result.data.selectedLanguage) {
+        setSelectedLang(result.data.selectedLanguage);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "অপ্রত্যাশিত সমস্যা হয়েছে।";
@@ -206,7 +200,7 @@ export default function Home() {
         {/* Header */}
         <header className="flex flex-col items-center text-center gap-3">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold uppercase tracking-wider shadow-inner">
-            <Youtube className="w-4 h-4 text-red-500" />
+            <YoutubeIcon className="w-4 h-4 text-red-500" />
             <span>YouTube InnerTube AI Engine</span>
           </div>
 
@@ -229,7 +223,7 @@ export default function Home() {
             className="flex flex-col sm:flex-row items-center gap-2 p-2 rounded-2xl bg-neutral-900/90 border border-neutral-800 shadow-2xl backdrop-blur-xl focus-within:border-red-500/60 focus-within:ring-2 focus-within:ring-red-500/20 transition-all"
           >
             <div className="relative flex-1 w-full flex items-center">
-              <Youtube className="absolute left-4 w-5 h-5 text-neutral-500 pointer-events-none" />
+              <YoutubeIcon className="absolute left-4 w-5 h-5 text-neutral-500 pointer-events-none" />
               <input
                 type="text"
                 value={url}
@@ -581,7 +575,7 @@ export default function Home() {
         {!data && !loading && !error && (
           <div className="flex flex-col items-center justify-center p-12 rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/30 text-center gap-3">
             <div className="p-4 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-500">
-              <Youtube className="w-8 h-8" />
+              <YoutubeIcon className="w-8 h-8" />
             </div>
             <h3 className="text-base font-semibold text-neutral-300">
               উপরে একটি YouTube ভিডিওর লিংক পেস্ট করুন

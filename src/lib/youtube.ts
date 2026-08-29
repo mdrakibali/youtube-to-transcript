@@ -155,7 +155,7 @@ export async function fetchYouTubeTranscript(
       errorMsg.includes("Transcript not available")
     ) {
       throw new Error(
-        "NO_TRANSCRIPT: এই ভিডিওটিতে কোনো ট্রান্সক্রিপ্ট বা সাবটাইটেল উপলব্ধ নেই। (No transcripts or captions are available for this video on YouTube)."
+        "NO_TRANSCRIPT: No captions or transcripts are available for this video on YouTube."
       );
     }
     if (
@@ -164,7 +164,7 @@ export async function fetchYouTubeTranscript(
       errorMsg.includes("age")
     ) {
       throw new Error(
-        "PRIVATE_VIDEO: এটি একটি প্রাইভেট বা বয়স-সীমাবদ্ধ ভিডিও। (This is a private or restricted video requiring authentication)."
+        "PRIVATE_VIDEO: This is a private or age-restricted video requiring authentication."
       );
     }
     throw new Error(`TRANSCRIPT_ERROR: ${errorMsg}`);
@@ -172,7 +172,7 @@ export async function fetchYouTubeTranscript(
 
   if (!transcriptData) {
     throw new Error(
-      "NO_TRANSCRIPT: এই ভিডিওটিতে কোনো ট্রান্সক্রিপ্ট বা সাবটাইটেল পাওয়া যায়নি। (No transcript tracks found for this video)."
+      "NO_TRANSCRIPT: No transcript tracks found for this video."
     );
   }
 
@@ -258,7 +258,7 @@ export async function fetchYouTubeTranscript(
 
   if (segments.length === 0) {
     throw new Error(
-      "NO_TRANSCRIPT: ভিডিওটিতে কোনো ট্রান্সক্রিপ্ট টেক্সট পাওয়া যায়নি। (No transcript text segments found)."
+      "NO_TRANSCRIPT: No transcript text segments found for this video."
     );
   }
 
