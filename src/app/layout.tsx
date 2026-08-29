@@ -1,21 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Hind_Siliguri } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+const hindSiliguri = Hind_Siliguri({
+  weight: ["300", "400", "500", "600", "700"],
+  subsets: ["bengali", "latin"],
+  variable: "--font-hind-siliguri",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "YouTube Transcript Extractor - Fast & Easy Subtitle Viewer",
+  title: "TranscriptTube - Fast YouTube Transcript & Video Sync",
   description:
-    "Extract and download YouTube video transcripts, subtitles, and timestamps in seconds. Supports multi-language captions and clean export formats.",
+    "Extract, search, and download YouTube video transcripts and subtitles with timestamps in seconds. Supports multi-language captions and synchronized video playback.",
 };
 
 export default function RootLayout({
@@ -24,11 +21,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={hindSiliguri.variable}>
       <head>
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-neutral-950 text-neutral-100 min-h-screen`}>
+      <body
+        className={`${hindSiliguri.className} antialiased bg-[#09090b] text-neutral-100 min-h-screen font-sans`}
+      >
         {children}
       </body>
     </html>

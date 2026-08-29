@@ -29,6 +29,7 @@ export async function getTranscriptAction(input: {
     }
 
     const videoId = extractVideoId(url);
+    console.log("Extracted video ID:", videoId);
     if (!videoId) {
       return {
         success: false,
