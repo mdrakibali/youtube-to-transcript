@@ -172,35 +172,69 @@ export function mergeSegments(
 }
 
 /**
- * Helper to get Scraper API Key from Cloudflare context or process.env
+ * Helper to get Proxy settings from Cloudflare context or process.env
  */
-function getScraperApiKey(): string | undefined {
+function getProxyConfig(): { scraperApiKey?: string; proxyUrl?: string } {
   try {
     const cf = getCloudflareContext();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const env = cf?.env as any;
-    if (env?.SCRAPER_API_KEY) {
-      return env.SCRAPER_API_KEY;
+    if (env?.SCRAPER_API_KEY || env?.PROXY_URL) {
+      return {
+        scraperApiKey: env.SCRAPER_API_KEY,
+        proxyUrl: env.PROXY_URL,
+      };
     }
   } catch {
     // ignore
   }
-  return process.env.SCRAPER_API_KEY;
+  return {
+    scraperApiKey: process.env.SCRAPER_API_KEY,
+    proxyUrl: process.env.PROXY_URL,
+  };
 }
 
 /**
- * Fetch video metadata and transcript using youtube-transcript-plus with ScraperAPI/Proxy support.
+ * Helper to get YouTube Session Cookie from options, Cloudflare context, or default fallback
+ */
+function getEffectiveCookie(customCookie?: string): string {
+  if (customCookie?.trim()) return customCookie.trim();
+
+  try {
+    const cf = getCloudflareContext();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const env = cf?.env as any;
+    if (env?.YOUTUBE_COOKIE) {
+      return env.YOUTUBE_COOKIE;
+    }
+  } catch {
+    // ignore
+  }
+
+  return process.env.YOUTUBE_COOKIE || "VISITOR_INFO1_LIVE=jeCAn7bB8KM";
+}
+
+/**
+ * Fetch video metadata and transcript using youtube-transcript-plus with ScraperAPI/Custom Proxy and Cookie support.
  */
 export async function getTranscript(
   videoId: string,
   options?: { lang?: string; cookie?: string }
 ): Promise<TranscriptResponse> {
-  const scraperApiKey = getScraperApiKey();
+  const { scraperApiKey, proxyUrl } = getProxyConfig();
+  const hasProxy = Boolean(scraperApiKey || proxyUrl);
+  const effectiveCookie = getEffectiveCookie(options?.cookie);
 
   const viaProxy = (targetUrl: string, init?: RequestInit) => {
     if (scraperApiKey) {
-      const proxyUrl = `https://api.scraperapi.com/?api_key=${scraperApiKey}&url=${encodeURIComponent(targetUrl)}`;
-      return fetch(proxyUrl, init);
+      const url = `https://api.scraperapi.com/?api_key=${scraperApiKey}&url=${encodeURIComponent(targetUrl)}`;
+      return fetch(url, init);
+    }
+    if (proxyUrl) {
+      const url = proxyUrl.includes("{url}")
+        ? proxyUrl.replace("{url}", encodeURIComponent(targetUrl))
+        : `${proxyUrl}${encodeURIComponent(targetUrl)}`;
+      return fetch(url, init);
     }
     return fetch(targetUrl, init);
   };
@@ -208,14 +242,14 @@ export async function getTranscript(
   const config: TranscriptConfig & { videoDetails: true } = {
     videoDetails: true,
     lang: options?.lang && options.lang !== "default" ? options.lang : undefined,
-    ...(scraperApiKey
+    ...(hasProxy
       ? {
           videoFetch: ({ url, lang, userAgent }) =>
             viaProxy(url, {
               headers: {
                 "User-Agent": userAgent || "Mozilla/5.0",
                 ...(lang && { "Accept-Language": lang }),
-                ...(options?.cookie && { Cookie: options.cookie }),
+                Cookie: effectiveCookie,
               },
             }),
           transcriptFetch: ({ url, lang, userAgent }) =>
@@ -223,7 +257,7 @@ export async function getTranscript(
               headers: {
                 "User-Agent": userAgent || "Mozilla/5.0",
                 ...(lang && { "Accept-Language": lang }),
-                ...(options?.cookie && { Cookie: options.cookie }),
+                Cookie: effectiveCookie,
               },
             }),
           playerFetch: ({ url, body, headers }) =>
@@ -232,13 +266,34 @@ export async function getTranscript(
               body,
               headers: {
                 ...headers,
-                ...(options?.cookie && { Cookie: options.cookie }),
+                Cookie: effectiveCookie,
               },
             }),
         }
       : {
           userAgent:
             "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+          playerFetch: ({ url, body, headers }) =>
+            fetch(url, {
+              method: "POST",
+              body,
+              headers: {
+                ...headers,
+                "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+                "X-YouTube-Client-Name": "3",
+                "X-YouTube-Client-Version": "20.10.38",
+                Origin: "https://www.youtube.com",
+                Cookie: effectiveCookie,
+              },
+            }),
+          transcriptFetch: ({ url, lang, userAgent }) =>
+            fetch(url, {
+              headers: {
+                "User-Agent": userAgent || "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+                ...(lang && { "Accept-Language": lang }),
+                Cookie: effectiveCookie,
+              },
+            }),
         }),
   };
 
@@ -246,7 +301,7 @@ export async function getTranscript(
   let availableLanguages: TranscriptLanguage[] = [];
   try {
     const rawLanguages = await listLanguages(videoId, {
-      ...(scraperApiKey
+      ...(hasProxy
         ? {
             playerFetch: ({ url, body, headers }) =>
               viaProxy(url, {
@@ -254,12 +309,25 @@ export async function getTranscript(
                 body,
                 headers: {
                   ...headers,
-                  ...(options?.cookie && { Cookie: options.cookie }),
+                  Cookie: effectiveCookie,
                 },
               }),
           }
         : {
             userAgent: "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+            playerFetch: ({ url, body, headers }) =>
+              fetch(url, {
+                method: "POST",
+                body,
+                headers: {
+                  ...headers,
+                  "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
+                  "X-YouTube-Client-Name": "3",
+                  "X-YouTube-Client-Version": "20.10.38",
+                  Origin: "https://www.youtube.com",
+                  Cookie: effectiveCookie,
+                },
+              }),
           }),
     });
 
