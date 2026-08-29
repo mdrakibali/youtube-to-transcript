@@ -1,9 +1,3 @@
-import {
-  fetchTranscript,
-  listLanguages,
-  type TranscriptConfig,
-  type TranscriptSegment as RawSegment,
-} from "youtube-transcript-plus";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export interface TranscriptSegment {
@@ -40,6 +34,21 @@ export interface TranscriptResponse {
   fullText: string;
 }
 
+interface RawCaptionTrack {
+  baseUrl: string;
+  name?: {
+    runs?: Array<{ text: string }>;
+    simpleText?: string;
+  };
+  vssId?: string;
+  languageCode: string;
+  kind?: string;
+  isTranslatable?: boolean;
+}
+
+const INNERTUBE_API_URL = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false";
+const INNERTUBE_CLIENT_VERSION = "20.10.38";
+
 /**
  * Extracts YouTube video ID from various URL patterns or raw ID string.
  */
@@ -48,12 +57,10 @@ export function extractVideoId(input: string): string | null {
 
   const trimmed = input.trim();
 
-  // If input is already an 11-character YouTube video ID
   if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
     return trimmed;
   }
 
-  // Common YouTube URL regex patterns
   const patterns = [
     /(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/i,
     /(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/i,
@@ -70,7 +77,6 @@ export function extractVideoId(input: string): string | null {
     }
   }
 
-  // Query parameter fallback
   try {
     const url = new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
     const v = url.searchParams.get("v");
@@ -78,7 +84,7 @@ export function extractVideoId(input: string): string | null {
       return v;
     }
   } catch {
-    // Not a standard URL
+    // ignore
   }
 
   return null;
@@ -158,7 +164,6 @@ export function mergeSegments(
     const cleanText = seg.text.trim();
     if (!cleanText) continue;
 
-    // If segment start time reaches or exceeds the next 6-second interval:
     if (seg.start_ms >= currentWindowStartMs + windowDurationMs && currentGroup.length > 0) {
       flushGroup();
       currentWindowStartMs = Math.floor(seg.start_ms / windowDurationMs) * windowDurationMs;
@@ -172,26 +177,70 @@ export function mergeSegments(
 }
 
 /**
- * Helper to get Proxy settings from Cloudflare context or process.env
+ * Parses transcript XML from either srv3 (<p t="ms" d="ms">) or classic (<text start="s" dur="s">).
  */
-function getProxyConfig(): { scraperApiKey?: string; proxyUrl?: string } {
-  try {
-    const cf = getCloudflareContext();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const env = cf?.env as any;
-    if (env?.SCRAPER_API_KEY || env?.PROXY_URL) {
-      return {
-        scraperApiKey: env.SCRAPER_API_KEY,
-        proxyUrl: env.PROXY_URL,
-      };
+function parseTranscriptXml(xml: string): TranscriptSegment[] {
+  const rawSegments: TranscriptSegment[] = [];
+
+  // 1. Try srv3 format (<p t="ms" d="ms">...<s>word</s>...</p>)
+  const pRegex = /<p\s+t="(\d+)"(?:\s+d="(\d+)")?[^>]*>([\s\S]*?)<\/p>/g;
+  let pMatch: RegExpExecArray | null;
+
+  while ((pMatch = pRegex.exec(xml)) !== null) {
+    const startMs = parseInt(pMatch[1], 10);
+    const durMs = pMatch[2] ? parseInt(pMatch[2], 10) : 3000;
+    const endMs = startMs + durMs;
+    const inner = pMatch[3];
+
+    let text = "";
+    const sRegex = /<s[^>]*>([^<]*)<\/s>/g;
+    let sMatch: RegExpExecArray | null;
+    while ((sMatch = sRegex.exec(inner)) !== null) {
+      text += sMatch[1];
     }
-  } catch {
-    // ignore
+    if (!text) {
+      text = inner.replace(/<[^>]+>/g, "");
+    }
+
+    text = decodeEntities(text);
+    if (text) {
+      rawSegments.push({
+        start_ms: startMs,
+        end_ms: endMs,
+        startFormatted: formatTimestamp(startMs, true),
+        endFormatted: formatTimestamp(endMs, true),
+        text,
+      });
+    }
   }
-  return {
-    scraperApiKey: process.env.SCRAPER_API_KEY,
-    proxyUrl: process.env.PROXY_URL,
-  };
+
+  if (rawSegments.length > 0) {
+    return mergeSegments(rawSegments, 6000);
+  }
+
+  // 2. Fallback to classic format: <text start="12.34" dur="4.56">content</text>
+  const textRegex = /<text\s+start="([\d.]+)"(?:\s+dur="([\d.]+)")?[^>]*>([\s\S]*?)<\/text>/g;
+  let tMatch: RegExpExecArray | null;
+
+  while ((tMatch = textRegex.exec(xml)) !== null) {
+    const startSec = parseFloat(tMatch[1]);
+    const durSec = tMatch[2] ? parseFloat(tMatch[2]) : 3;
+    const startMs = Math.round(startSec * 1000);
+    const endMs = Math.round((startSec + durSec) * 1000);
+    const text = decodeEntities(tMatch[3]);
+
+    if (text) {
+      rawSegments.push({
+        start_ms: startMs,
+        end_ms: endMs,
+        startFormatted: formatTimestamp(startMs, true),
+        endFormatted: formatTimestamp(endMs, true),
+        text,
+      });
+    }
+  }
+
+  return mergeSegments(rawSegments, 6000);
 }
 
 /**
@@ -215,15 +264,80 @@ function getEffectiveCookie(customCookie?: string): string {
 }
 
 /**
- * Fetch video metadata and transcript using youtube-transcript-plus with ScraperAPI/Custom Proxy and Cookie support.
+ * Helper to get Scraper / Proxy Settings
+ */
+function getProxyConfig(): { scraperApiKey?: string; proxyUrl?: string } {
+  try {
+    const cf = getCloudflareContext();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const env = cf?.env as any;
+    if (env?.SCRAPER_API_KEY || env?.PROXY_URL) {
+      return {
+        scraperApiKey: env.SCRAPER_API_KEY,
+        proxyUrl: env.PROXY_URL,
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return {
+    scraperApiKey: process.env.SCRAPER_API_KEY,
+    proxyUrl: process.env.PROXY_URL,
+  };
+}
+
+const CLIENT_CONFIGS = [
+  {
+    name: "ANDROID",
+    context: {
+      client: {
+        clientName: "ANDROID",
+        clientVersion: INNERTUBE_CLIENT_VERSION,
+        androidSdkVersion: 34,
+        hl: "en",
+        gl: "US",
+      },
+    },
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": `com.google.android.youtube/${INNERTUBE_CLIENT_VERSION} (Linux; U; Android 14)`,
+      "X-YouTube-Client-Name": "3",
+      "X-YouTube-Client-Version": INNERTUBE_CLIENT_VERSION,
+      "Origin": "https://www.youtube.com",
+    },
+  },
+  {
+    name: "IOS",
+    context: {
+      client: {
+        clientName: "IOS",
+        clientVersion: INNERTUBE_CLIENT_VERSION,
+        deviceModel: "iPhone16,2",
+        osVersion: "18.1.0",
+        hl: "en",
+        gl: "US",
+      },
+    },
+    headers: {
+      "Content-Type": "application/json",
+      "User-Agent": `com.google.ios.youtube/${INNERTUBE_CLIENT_VERSION} (iPhone16,2; U; CPU iOS 18_1_0 like Mac OS X; en_US)`,
+      "X-YouTube-Client-Name": "5",
+      "X-YouTube-Client-Version": INNERTUBE_CLIENT_VERSION,
+      "Origin": "https://www.youtube.com",
+    },
+  },
+];
+
+/**
+ * Fetch video metadata and transcript using Mobile InnerTube Player API directly.
+ * Completely eliminates HTML watch-page scraping and prevents Cloudflare Worker IP CAPTCHAs.
  */
 export async function getTranscript(
   videoId: string,
   options?: { lang?: string; cookie?: string }
 ): Promise<TranscriptResponse> {
-  const { scraperApiKey, proxyUrl } = getProxyConfig();
-  const hasProxy = Boolean(scraperApiKey || proxyUrl);
   const effectiveCookie = getEffectiveCookie(options?.cookie);
+  const { scraperApiKey, proxyUrl } = getProxyConfig();
 
   const viaProxy = (targetUrl: string, init?: RequestInit) => {
     if (scraperApiKey) {
@@ -239,213 +353,178 @@ export async function getTranscript(
     return fetch(targetUrl, init);
   };
 
-  const config: TranscriptConfig & { videoDetails: true } = {
-    videoDetails: true,
-    lang: options?.lang && options.lang !== "default" ? options.lang : undefined,
-    ...(hasProxy
-      ? {
-          videoFetch: ({ url, lang, userAgent }) =>
-            viaProxy(url, {
-              headers: {
-                "User-Agent": userAgent || "Mozilla/5.0",
-                ...(lang && { "Accept-Language": lang }),
-                Cookie: effectiveCookie,
-              },
-            }),
-          transcriptFetch: ({ url, lang, userAgent }) =>
-            viaProxy(url, {
-              headers: {
-                "User-Agent": userAgent || "Mozilla/5.0",
-                ...(lang && { "Accept-Language": lang }),
-                Cookie: effectiveCookie,
-              },
-            }),
-          playerFetch: ({ url, body, headers }) =>
-            viaProxy(url, {
-              method: "POST",
-              body,
-              headers: {
-                ...headers,
-                Cookie: effectiveCookie,
-              },
-            }),
-        }
-      : {
-          userAgent:
-            "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
-          playerFetch: ({ url, body, headers }) =>
-            fetch(url, {
-              method: "POST",
-              body,
-              headers: {
-                ...headers,
-                "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
-                "X-YouTube-Client-Name": "3",
-                "X-YouTube-Client-Version": "20.10.38",
-                Origin: "https://www.youtube.com",
-                Cookie: effectiveCookie,
-              },
-            }),
-          transcriptFetch: ({ url, lang, userAgent }) =>
-            fetch(url, {
-              headers: {
-                "User-Agent": userAgent || "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
-                ...(lang && { "Accept-Language": lang }),
-                Cookie: effectiveCookie,
-              },
-            }),
+  let captionTracks: RawCaptionTrack[] = [];
+  let title = "YouTube Video";
+  let author = "YouTube Channel";
+  let channelId = "";
+  let durationSeconds = 0;
+  let viewCount: string | undefined;
+  let thumbnail = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+  // 1. Fetch Player Data via Mobile InnerTube Clients (Android / iOS)
+  for (const clientConfig of CLIENT_CONFIGS) {
+    try {
+      const requestHeaders: Record<string, string> = {
+        ...clientConfig.headers,
+        Cookie: effectiveCookie,
+      };
+
+      const playerResp = await viaProxy(INNERTUBE_API_URL, {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({
+          context: clientConfig.context,
+          videoId,
         }),
-  };
-
-  // 1. Fetch available languages (if available)
-  let availableLanguages: TranscriptLanguage[] = [];
-  try {
-    const rawLanguages = await listLanguages(videoId, {
-      ...(hasProxy
-        ? {
-            playerFetch: ({ url, body, headers }) =>
-              viaProxy(url, {
-                method: "POST",
-                body,
-                headers: {
-                  ...headers,
-                  Cookie: effectiveCookie,
-                },
-              }),
-          }
-        : {
-            userAgent: "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
-            playerFetch: ({ url, body, headers }) =>
-              fetch(url, {
-                method: "POST",
-                body,
-                headers: {
-                  ...headers,
-                  "User-Agent": "com.google.android.youtube/20.10.38 (Linux; U; Android 14)",
-                  "X-YouTube-Client-Name": "3",
-                  "X-YouTube-Client-Version": "20.10.38",
-                  Origin: "https://www.youtube.com",
-                  Cookie: effectiveCookie,
-                },
-              }),
-          }),
-    });
-
-    if (rawLanguages && rawLanguages.length > 0) {
-      availableLanguages = rawLanguages.map((l) => ({
-        id: l.languageCode,
-        languageCode: l.languageCode,
-        name: l.languageName || l.languageCode.toUpperCase(),
-        isAutoGenerated: l.isAutoGenerated,
-      }));
-    }
-  } catch {
-    // If listing languages fails, continue to transcript fetch
-  }
-
-  // Determine appropriate target language (user choice, or English if available, or video's native track)
-  let targetLang: string | undefined = undefined;
-  if (options?.lang && options.lang !== "default") {
-    targetLang = options.lang;
-  } else if (availableLanguages.length > 0) {
-    const enTrack = availableLanguages.find(
-      (l) => l.languageCode === "en" || l.languageCode.startsWith("en")
-    );
-    if (enTrack) {
-      targetLang = enTrack.languageCode;
-    } else {
-      // Default to the video's primary audio/caption language (e.g. bn, ar, es, hi)
-      targetLang = availableLanguages[0].languageCode;
-    }
-  }
-
-  // 2. Fetch transcript with resolved target language
-  let result;
-  try {
-    result = await fetchTranscript(videoId, {
-      ...config,
-      lang: targetLang,
-    });
-  } catch (firstErr: unknown) {
-    // Fallback: If requested/derived language failed, try with first available language
-    if (availableLanguages.length > 0 && targetLang !== availableLanguages[0].languageCode) {
-      result = await fetchTranscript(videoId, {
-        ...config,
-        lang: availableLanguages[0].languageCode,
       });
-    } else {
-      throw firstErr;
+
+      if (playerResp.ok) {
+        const data = (await playerResp.json()) as {
+          videoDetails?: {
+            title?: string;
+            author?: string;
+            channelId?: string;
+            lengthSeconds?: string;
+            viewCount?: string;
+            thumbnail?: { thumbnails?: Array<{ url: string }> };
+          };
+          captions?: {
+            playerCaptionsTracklistRenderer?: {
+              captionTracks?: RawCaptionTrack[];
+            };
+          };
+          playabilityStatus?: {
+            status?: string;
+            reason?: string;
+          };
+        };
+
+        if (data.playabilityStatus?.status === "UNPLAYABLE") {
+          throw new Error(
+            `PRIVATE_VIDEO: ${data.playabilityStatus.reason || "This video is unavailable or restricted."}`
+          );
+        }
+
+        const details = data.videoDetails;
+        if (details) {
+          if (details.title) title = details.title;
+          if (details.author) author = details.author;
+          if (details.channelId) channelId = details.channelId;
+          if (details.lengthSeconds) durationSeconds = parseInt(details.lengthSeconds, 10);
+          if (details.viewCount) viewCount = Number(details.viewCount).toLocaleString();
+          if (details.thumbnail?.thumbnails?.length) {
+            thumbnail = details.thumbnail.thumbnails.slice(-1)[0].url;
+          }
+        }
+
+        const tracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+        if (tracks.length > 0) {
+          captionTracks = tracks;
+          break; // successfully retrieved tracks!
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.startsWith("PRIVATE_VIDEO:")) {
+        throw err;
+      }
     }
   }
 
-  if (!result || !result.segments || result.segments.length === 0) {
+  // 2. Fallback to YouTube oEmbed if title is still missing
+  if (title === "YouTube Video") {
+    try {
+      const oembedRes = await fetch(
+        `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`,
+        { headers: { "User-Agent": "Mozilla/5.0" } }
+      );
+      if (oembedRes.ok) {
+        const oembedData = (await oembedRes.json()) as { title?: string; author_name?: string };
+        if (oembedData?.title) title = oembedData.title;
+        if (oembedData?.author_name) author = oembedData.author_name;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  if (captionTracks.length === 0) {
     throw new Error(
       "NO_TRANSCRIPT: No captions or transcripts are available for this video on YouTube."
     );
   }
 
-  // 3. Format & map raw segments to TranscriptSegment
-  const rawSegments: TranscriptSegment[] = result.segments.map((item: RawSegment) => {
-    const startMs = Math.round(item.offset * 1000);
-    const durMs = Math.round(item.duration * 1000);
-    const endMs = startMs + durMs;
-
+  // 3. Map available languages
+  const availableLanguages: TranscriptLanguage[] = captionTracks.map((t, idx) => {
+    const name = t.name?.runs?.[0]?.text || t.name?.simpleText || t.languageCode;
+    const isAuto = t.kind === "asr" || t.vssId?.startsWith("a.") || false;
+    const uniqueId = t.vssId || `${t.languageCode}-${isAuto ? "auto" : "manual"}-${idx}`;
     return {
-      text: decodeEntities(item.text.trim()),
-      start_ms: startMs,
-      end_ms: endMs,
-      startFormatted: formatTimestamp(startMs, true),
-      endFormatted: formatTimestamp(endMs, true),
+      id: uniqueId,
+      languageCode: t.languageCode,
+      name,
+      isAutoGenerated: isAuto,
     };
   });
 
-  // 4. Merge into 6-second interval windows
-  const segments = mergeSegments(rawSegments, 6000);
-  const fullText = segments.map((s) => s.text).join(" ");
-
-  const durationSeconds = result.videoDetails?.lengthSeconds
-    ? result.videoDetails.lengthSeconds
-    : segments.length > 0
-      ? Math.ceil(segments[segments.length - 1].end_ms / 1000)
-      : 0;
-
-  const title = result.videoDetails?.title || "YouTube Video";
-  const author = result.videoDetails?.author || "YouTube Channel";
-  const channelId = result.videoDetails?.channelId;
-  const viewCount = result.videoDetails?.viewCount
-    ? Number(result.videoDetails.viewCount).toLocaleString()
-    : undefined;
-  const thumbnail =
-    result.videoDetails?.thumbnails?.slice(-1)[0]?.url ||
-    `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-
-  const selectedLanguage =
-    options?.lang && options.lang !== "default"
-      ? options.lang
-      : result.segments[0]?.lang || "default";
-
-  if (availableLanguages.length === 0) {
-    availableLanguages = [
-      {
-        id: selectedLanguage,
-        languageCode: selectedLanguage,
-        name: selectedLanguage.toUpperCase(),
-        isAutoGenerated: true,
-      },
-    ];
+  // 4. Select requested language or default to English/native audio track
+  let selectedTrack: RawCaptionTrack;
+  if (options?.lang && options.lang !== "default") {
+    selectedTrack =
+      captionTracks.find((t, idx) => {
+        const uniqueId = t.vssId || `${t.languageCode}-${t.kind === "asr" ? "auto" : "manual"}-${idx}`;
+        return uniqueId === options.lang || t.languageCode === options.lang;
+      }) || captionTracks[0];
+  } else {
+    selectedTrack =
+      captionTracks.find((t) => (t.languageCode === "en" || t.languageCode?.startsWith("en")) && t.kind !== "asr") ||
+      captionTracks.find((t) => t.languageCode === "en" || t.languageCode?.startsWith("en")) ||
+      captionTracks[0];
   }
 
-  return {
-    metadata: {
-      id: videoId,
-      title,
-      author,
-      channelId,
-      durationSeconds,
-      durationFormatted: formatTimestamp(durationSeconds, false),
-      thumbnail,
-      viewCount,
+  const selectedTrackIdx = captionTracks.indexOf(selectedTrack);
+  const selectedLanguage =
+    selectedTrack.vssId ||
+    `${selectedTrack.languageCode}-${selectedTrack.kind === "asr" ? "auto" : "manual"}-${selectedTrackIdx >= 0 ? selectedTrackIdx : 0}`;
+
+  // 5. Download transcript XML with mobile User-Agent
+  const transcriptResp = await viaProxy(selectedTrack.baseUrl, {
+    headers: {
+      "User-Agent": `com.google.android.youtube/${INNERTUBE_CLIENT_VERSION} (Linux; U; Android 14)`,
+      Cookie: effectiveCookie,
     },
+  });
+
+  if (!transcriptResp.ok) {
+    throw new Error("NO_TRANSCRIPT: Could not download the transcript track from YouTube.");
+  }
+
+  const xml = await transcriptResp.text();
+  const segments = parseTranscriptXml(xml);
+
+  if (segments.length === 0) {
+    throw new Error("NO_TRANSCRIPT: No transcript text segments found for this video.");
+  }
+
+  const fullText = segments.map((s) => s.text).join(" ");
+
+  if (durationSeconds === 0 && segments.length > 0) {
+    durationSeconds = Math.ceil(segments[segments.length - 1].end_ms / 1000);
+  }
+
+  const metadata: VideoMetadata = {
+    id: videoId,
+    title,
+    author,
+    channelId,
+    durationSeconds,
+    durationFormatted: formatTimestamp(durationSeconds, false),
+    thumbnail,
+    viewCount,
+  };
+
+  return {
+    metadata,
     selectedLanguage,
     availableLanguages,
     segments,
