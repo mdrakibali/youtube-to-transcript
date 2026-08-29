@@ -275,8 +275,40 @@ export async function getTranscript(
     // If listing languages fails, continue to transcript fetch
   }
 
-  // 2. Fetch transcript with video details
-  const result = await fetchTranscript(videoId, config);
+  // Determine appropriate target language (user choice, or English if available, or video's native track)
+  let targetLang: string | undefined = undefined;
+  if (options?.lang && options.lang !== "default") {
+    targetLang = options.lang;
+  } else if (availableLanguages.length > 0) {
+    const enTrack = availableLanguages.find(
+      (l) => l.languageCode === "en" || l.languageCode.startsWith("en")
+    );
+    if (enTrack) {
+      targetLang = enTrack.languageCode;
+    } else {
+      // Default to the video's primary audio/caption language (e.g. bn, ar, es, hi)
+      targetLang = availableLanguages[0].languageCode;
+    }
+  }
+
+  // 2. Fetch transcript with resolved target language
+  let result;
+  try {
+    result = await fetchTranscript(videoId, {
+      ...config,
+      lang: targetLang,
+    });
+  } catch (firstErr: unknown) {
+    // Fallback: If requested/derived language failed, try with first available language
+    if (availableLanguages.length > 0 && targetLang !== availableLanguages[0].languageCode) {
+      result = await fetchTranscript(videoId, {
+        ...config,
+        lang: availableLanguages[0].languageCode,
+      });
+    } else {
+      throw firstErr;
+    }
+  }
 
   if (!result || !result.segments || result.segments.length === 0) {
     throw new Error(
