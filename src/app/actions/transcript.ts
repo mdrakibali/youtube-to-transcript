@@ -2,8 +2,7 @@
 
 import {
   extractVideoId,
-  fetchYouTubeTranscript,
-  fetchTranscriptViaYoutubeTranscript,
+  getTranscript,
   type TranscriptResponse,
 } from "@/lib/youtube-transcript";
 
@@ -15,9 +14,7 @@ export interface TranscriptActionResult {
 }
 
 /**
- * Next.js Server Action to fetch YouTube transcripts with dual-engine fallback.
- * Primary: Multi-Track InnerTube & Web Engine (Smart language selection & full metadata)
- * Fallback: youtube-transcript package engine
+ * Next.js Server Action to fetch YouTube transcripts using youtube-transcript-plus with Cloudflare support.
  */
 export async function getTranscriptAction(input: {
   url: string;
@@ -48,51 +45,20 @@ export async function getTranscriptAction(input: {
     // Support optional environment variable cookie
     const effectiveCookie = cookie?.trim() || process.env.YOUTUBE_COOKIE;
 
-    // 1. Try Primary Engine (Smart Language Selection & Multi-Track InnerTube)
-    try {
-      const data = await fetchYouTubeTranscript(videoId, {
-        lang: lang === "default" ? undefined : lang,
-        cookie: effectiveCookie,
-      });
+    const data = await getTranscript(videoId, {
+      lang: lang === "default" ? undefined : lang,
+      cookie: effectiveCookie,
+    });
 
-      return {
-        success: true,
-        data,
-      };
-    } catch (primaryError: unknown) {
-      console.warn("Primary engine failed, falling back to secondary engine:", primaryError);
-
-      // 2. Fallback to Secondary Engine (youtube-transcript)
-      try {
-        const fallbackData = await fetchTranscriptViaYoutubeTranscript(videoId, lang);
-        return {
-          success: true,
-          data: fallbackData,
-        };
-      } catch (fallbackError: unknown) {
-        console.error("Both transcript engines failed:", fallbackError);
-        const errorMessage =
-          primaryError instanceof Error ? primaryError.message : String(primaryError);
-
-        let errorCode = "NO_TRANSCRIPT";
-        if (errorMessage.startsWith("PRIVATE_VIDEO:")) {
-          errorCode = "PRIVATE_VIDEO";
-        }
-
-        return {
-          success: false,
-          error: errorCode,
-          message: errorMessage.replace(/^[A-Z_]+:\s*/, ""),
-        };
-      }
-    }
+    return {
+      success: true,
+      data,
+    };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred.";
 
-    let errorCode = "INTERNAL_ERROR";
-    if (errorMessage.startsWith("NO_TRANSCRIPT:")) {
-      errorCode = "NO_TRANSCRIPT";
-    } else if (errorMessage.startsWith("PRIVATE_VIDEO:")) {
+    let errorCode = "NO_TRANSCRIPT";
+    if (errorMessage.includes("PRIVATE_VIDEO") || errorMessage.includes("unavailable")) {
       errorCode = "PRIVATE_VIDEO";
     }
 
